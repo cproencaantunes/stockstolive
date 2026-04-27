@@ -15,6 +15,7 @@ from analysis import select_strategy, run_evening_analysis, run_premarket_analys
 from options import roll_position, open_covered_call, open_bear_call_spread, get_next_friday
 from data import get_market_data, get_market_overview, get_top_movers, get_premarket_data
 from notifications import send_email_report, send_push_notification
+from institutional_flow import run_flow_scan, check_vix_spike
 
 # Logging
 logging.basicConfig(
@@ -270,6 +271,45 @@ def evening_research():
         log.error(f"Evening research: {e}")
 
 
+def flow_scan_job():
+    """De hora em hora — deteta fluxo institucional."""
+    log.info("=== FLOW SCAN INSTITUCIONAL ===")
+    try:
+        # VIX spike — verificar primeiro
+        vix_alert = check_vix_spike()
+        if vix_alert:
+            log.warning(vix_alert["reason"])
+            send_push_notification(
+                vix_alert["reason"],
+                title="⚠️ VIX Spike",
+                priority=1
+            )
+
+        # Scan completo
+        tickers = list(portfolio.active_positions.keys())
+        signals = run_flow_scan(portfolio_tickers=tickers)
+
+        for s in signals:
+            analysis = s.get("llm_analysis", {})
+            action   = analysis.get("action", "observar")
+            conf     = analysis.get("confidence", 0)
+            summary  = analysis.get("summary", s["reason"])
+
+            emoji = "🟢" if s["direction"] == "bullish" else "🔴"
+            priority = 1 if action == "considerar_entrada" else 0
+
+            send_push_notification(
+                f"{emoji} {s['ticker']} | {summary}",
+                title=f"Fluxo Institucional — {s['ticker']}",
+                priority=priority
+            )
+            log.info(f"{s['ticker']} | {action} | {conf}% | {summary}")
+
+        log.info(f"Flow scan: {len(signals)} sinais relevantes")
+    except Exception as e:
+        log.error(f"Flow scan erro: {e}")
+
+
 def premarket_briefing():
     """08h30 ET — briefing pré-abertura."""
     log.info("=== BRIEFING PRÉ-ABERTURA ===")
@@ -319,6 +359,11 @@ def start():
     scheduler.add_job(premarket_briefing, "cron",
                       day_of_week="tue-sat", hour=8, minute=30,
                       id="premarket_briefing")
+
+    # Flow scan institucional — de hora em hora durante o mercado
+    scheduler.add_job(flow_scan_job, "cron",
+                      day_of_week="mon-fri", hour="9-16", minute=0,
+                      id="flow_scan")
 
     log.info("━━ TRADING AGENT INICIADO ━━━━━━━━━━━━━━━━━━")
     log.info(f"Provider LLM: {__import__('config').LLM_PROVIDER}")
