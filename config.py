@@ -27,6 +27,13 @@ EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
 PUSHOVER_APP   = os.getenv("PUSHOVER_APP",   "")
 PUSHOVER_USER  = os.getenv("PUSHOVER_USER",  "")
 
+# ── UNUSUAL WHALES (opcional — $50/mês) ───────────────────────────
+UNUSUAL_WHALES_TOKEN = os.getenv("UNUSUAL_WHALES_TOKEN", "")
+
+# ── FLOW SCAN ─────────────────────────────────────────────────────
+FLOW_SCAN_INTERVAL_MIN = int(os.getenv("FLOW_SCAN_INTERVAL", "60"))
+FLOW_MIN_CONFIDENCE    = int(os.getenv("FLOW_MIN_CONFIDENCE", "60"))
+
 # ── AMBIENTE ──────────────────────────────────────────────────────
 ENV            = os.getenv("RAILWAY_ENV", "development")
 TIMEZONE       = "America/New_York"
