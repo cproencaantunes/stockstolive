@@ -39,7 +39,10 @@ def save_config(cfg: dict):
 
 @app.route("/")
 def index():
-    return send_from_directory("../", "portfolio_dashboard.html")
+    return send_from_directory(
+        os.path.dirname(os.path.abspath(__file__)),
+        "index.html"
+    )
 
 
 # ── API — ESTADO ──────────────────────────────────────────────────
