@@ -3,7 +3,7 @@ dashboard/app.py — Flask backend com API para gestão do portfolio.
 Serve o dashboard HTML e expõe endpoints para adicionar/remover ações.
 """
 
-import json, logging
+import os, import json, logging
 from datetime import date
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
