@@ -210,6 +210,60 @@ def update_stock():
     return jsonify({"ok": True, "config": asdict(cfg[ticker])})
 
 
+@app.route("/api/research/run", methods=["POST"])
+def run_research_now():
+    """Dispara o research manualmente — para testes."""
+    try:
+        import threading
+        from analysis import run_evening_analysis
+        from data import get_market_overview, get_top_movers
+
+        def _run():
+            try:
+                market   = get_market_overview()
+                movers   = get_top_movers()
+                tickers  = list(portfolio.positions.keys())
+                analysis = run_evening_analysis(market, movers, tickers)
+                Path("data").mkdir(exist_ok=True)
+                Path("data/evening_research.json").write_text(
+                    json.dumps({
+                        "date":     date.today().isoformat(),
+                        "analysis": analysis,
+                    }, indent=2)
+                )
+                log.info("Research manual concluído")
+            except Exception as e:
+                log.error(f"Research manual erro: {e}")
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+        return jsonify({"ok": True, "message": "Research iniciado — disponível em ~30 segundos"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/flow/run", methods=["POST"])
+def run_flow_now():
+    """Dispara o scan de fluxo institucional manualmente."""
+    try:
+        import threading
+        from institutional_flow import run_flow_scan
+
+        def _run():
+            try:
+                tickers = list(portfolio.positions.keys())
+                run_flow_scan(portfolio_tickers=tickers)
+                log.info("Flow scan manual concluído")
+            except Exception as e:
+                log.error(f"Flow scan manual erro: {e}")
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+        return jsonify({"ok": True, "message": "Flow scan iniciado — disponível em ~60 segundos"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/api/health")
 def health():
     return jsonify({
@@ -222,5 +276,4 @@ def health():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(__import__("os").getenv("PORT", 8080)),
-            debug=False)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)), debug=False)
