@@ -376,7 +376,19 @@ main{padding:24px 28px;max-width:1440px;margin:0 auto}
           🔴 Distribuição
         </span>
       </div>
+      <button id="btn-run-flow" onclick="runFlowNow()"
+        style="background:var(--green-dim);border:1px solid rgba(0,214,143,0.25);
+               border-radius:8px;padding:7px 14px;color:var(--green);
+               font-family:'DM Mono',monospace;font-size:11px;cursor:pointer">
+        ▶ Correr agora
+      </button>
     </div>
+  </div>
+
+  <div id="flow-status" style="display:none;background:var(--amber-dim);
+       border:1px solid rgba(240,165,0,0.2);border-radius:8px;padding:12px 16px;
+       color:var(--amber);font-size:12px;margin-bottom:16px">
+    ⏳ A varrer mercado por volume anormal — aguardar ~60 segundos...
   </div>
 
   <!-- LEGENDA -->
@@ -843,119 +855,194 @@ const flowSignals = [
      risk_level:'alto'}},
 ];
 
-function renderFlow(){
-  const grid = document.getElementById('flow-grid');
+async function renderFlow(){
+  const grid  = document.getElementById('flow-grid');
   const count = document.getElementById('flow-count');
   if(!grid) return;
 
-  const bullish = flowSignals.filter(s=>s.direction==='bullish').length;
-  const bearish = flowSignals.filter(s=>s.direction==='bearish').length;
-  count.textContent = `${flowSignals.length} sinais · ${bullish} bullish · ${bearish} bearish`;
+  try {
+    const res  = await fetch('/api/flow-signals');
+    const data = await res.json();
+    const signals = data.signals || [];
+    const today   = signals.filter(s => {
+      const d = new Date(s.timestamp||'');
+      return d.toDateString() === new Date().toDateString();
+    });
 
-  grid.innerHTML = flowSignals.map(s=>{
-    const analysis = s.llm_analysis || {};
-    const isBull   = s.direction === 'bullish';
-    const col      = isBull ? 'var(--green)' : 'var(--red)';
-    const colDim   = isBull ? 'var(--green-dim)' : 'var(--red-dim)';
-    const colBorder= isBull ? 'rgba(0,214,143,0.2)' : 'rgba(255,64,96,0.2)';
-    const emoji    = isBull ? '🟢' : '🔴';
+    const bullish = signals.filter(s=>s.direction==='bullish').length;
+    const bearish = signals.filter(s=>s.direction==='bearish').length;
 
-    const actionColor = {
-      'considerar_entrada': 'var(--green)',
-      'observar':           'var(--amber)',
-      'evitar':             'var(--red)',
-    }[analysis.action] || 'var(--muted2)';
+    if(signals.length > 0){
+      count.textContent = `${signals.length} sinais · ${bullish} bullish · ${bearish} bearish`;
+    } else {
+      count.textContent = 'Sem sinais ainda';
+    }
 
-    const sourceLabel = {
-      'volume_spike':   'Volume Spike',
-      'unusual_whales': 'Unusual Options',
-      'vix_monitor':    'VIX Monitor',
-    }[s.source] || s.source;
+    if(signals.length === 0){
+      grid.innerHTML = `
+        <div style="grid-column:1/-1;text-align:center;padding:48px 20px;
+                    color:var(--muted2);font-size:13px;line-height:2">
+          Sem sinais detetados ainda.<br>
+          Clica <strong style="color:var(--green)">▶ Correr agora</strong>
+          para varrer o mercado.<br>
+          <span style="font-size:11px;color:var(--muted)">
+            (O scan corre automaticamente de hora em hora das 9h às 16h ET)
+          </span>
+        </div>`;
+      return;
+    }
 
-    const strengthColor = s.strength === 'extremo' ? 'var(--red)' :
-                          s.strength === 'forte'   ? 'var(--amber)' : 'var(--muted2)';
+    grid.innerHTML = signals.map(s => {
+      const analysis  = s.llm_analysis || {};
+      const isBull    = s.direction === 'bullish';
+      const col       = isBull ? 'var(--green)' : 'var(--red)';
+      const colDim    = isBull ? 'var(--green-dim)' : 'var(--red-dim)';
+      const colBorder = isBull ? 'rgba(0,214,143,0.2)' : 'rgba(255,64,96,0.2)';
+      const emoji     = isBull ? '🟢' : '🔴';
 
-    const time = new Date(s.timestamp).toLocaleTimeString('pt-PT',
-      {hour:'2-digit',minute:'2-digit'});
+      const actionColor = {
+        'considerar_entrada': 'var(--green)',
+        'observar':           'var(--amber)',
+        'evitar':             'var(--red)',
+      }[analysis.action] || 'var(--muted2)';
 
-    const metaExtra = s.source === 'unusual_whales'
-      ? `<span>Prémio: <span style="color:var(--text)">${s.premium_fmt}</span></span>
-         <span>Strike: <span style="color:var(--text)">$${s.strike}</span></span>`
-      : s.source === 'volume_spike'
-      ? `<span>Volume: <span style="color:var(--text)">${s.vol_ratio}x</span></span>
-         <span>Preço: <span style="color:${col}">${s.change_pct>0?'+':''}${s.change_pct}%</span></span>`
-      : '';
+      const sourceLabel = {
+        'volume_spike':   'Volume Spike',
+        'unusual_whales': 'Unusual Options',
+        'vix_monitor':    'VIX Monitor',
+      }[s.source] || s.source;
 
-    return `
-    <div style="background:var(--bg2);border:1px solid ${colBorder};
-                border-radius:12px;padding:18px;transition:transform .2s;
-                animation:fadeUp .35s ease both"
-         onmouseover="this.style.transform='translateY(-2px)'"
-         onmouseout="this.style.transform=''">
+      const strengthColor = s.strength==='extremo' ? 'var(--red)' :
+                            s.strength==='forte'   ? 'var(--amber)' : 'var(--muted2)';
 
-      <!-- TOP -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:18px">${emoji}</span>
-          <div>
-            <div style="font-family:'Syne',sans-serif;font-size:17px;font-weight:800;color:var(--text)">${s.ticker}</div>
-            <div style="font-size:10px;color:var(--muted2);margin-top:1px">${sourceLabel}</div>
+      const time = s.timestamp
+        ? new Date(s.timestamp).toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'})
+        : '—';
+
+      const metaExtra = s.source==='unusual_whales'
+        ? `<span>Prémio: <span style="color:var(--text)">${s.premium_fmt||'—'}</span></span>
+           <span>Strike: <span style="color:var(--text)">$${s.strike||'—'}</span></span>`
+        : s.source==='volume_spike'
+        ? `<span>Volume: <span style="color:var(--text)">${s.vol_ratio||'—'}x</span></span>
+           <span>Preço: <span style="color:${col}">${s.change_pct>0?'+':''}${s.change_pct||0}%</span></span>`
+        : '';
+
+      return `
+      <div style="background:var(--bg2);border:1px solid ${colBorder};
+                  border-radius:12px;padding:18px;transition:transform .2s;
+                  animation:fadeUp .35s ease both"
+           onmouseover="this.style.transform='translateY(-2px)'"
+           onmouseout="this.style.transform=''">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:18px">${emoji}</span>
+            <div>
+              <div style="font-family:'Syne',sans-serif;font-size:17px;font-weight:800;
+                          color:var(--text)">${s.ticker}</div>
+              <div style="font-size:10px;color:var(--muted2);margin-top:1px">${sourceLabel}</div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+            <span style="font-size:10px;color:${strengthColor};background:${colDim};
+                         padding:2px 8px;border-radius:4px;border:1px solid ${colBorder}">
+              ${(s.strength||'').toUpperCase()}
+            </span>
+            <span style="font-size:10px;color:var(--muted)">${time}</span>
           </div>
         </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-          <span style="font-size:10px;color:${strengthColor};background:${colDim};
-                       padding:2px 8px;border-radius:4px;border:1px solid ${colBorder}">
-            ${s.strength.toUpperCase()}
-          </span>
-          <span style="font-size:10px;color:var(--muted)">${time}</span>
+        <div style="background:var(--bg3);border-radius:6px;padding:10px 12px;
+                    margin-bottom:12px;border-left:3px solid ${col}">
+          <div style="color:var(--muted2);font-size:11px;margin-bottom:4px">${s.reason||''}</div>
+          <div style="color:var(--text);font-size:12px;line-height:1.5">
+            ${analysis.summary||''}
+          </div>
         </div>
-      </div>
+        <div style="display:flex;gap:12px;font-size:10px;color:var(--muted);
+                    margin-bottom:10px;flex-wrap:wrap">
+          ${metaExtra}
+          ${analysis.time_horizon?`<span>Horizonte: <span style="color:var(--text)">${analysis.time_horizon}</span></span>`:''}
+          ${analysis.risk_level?`<span>Risco: <span style="color:var(--text)">${analysis.risk_level}</span></span>`:''}
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;
+                    padding-top:10px;border-top:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:10px;color:var(--muted2)">Ação sugerida:</span>
+            <span style="font-size:11px;font-weight:500;color:${actionColor}">
+              ${(analysis.action||'').replace('_',' ').toUpperCase()}
+            </span>
+          </div>
+          ${analysis.suggested_instrument?`
+          <span style="font-size:10px;background:var(--bg4);border:1px solid var(--border2);
+                       padding:3px 8px;border-radius:5px;color:var(--muted2)">
+            ${analysis.suggested_instrument.replace('_',' ')}
+          </span>`:''}
+        </div>
+        ${analysis.confidence?`
+        <div style="margin-top:8px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px;
+                      font-size:10px;color:var(--muted)">
+            <span>Confiança LLM</span>
+            <span style="color:${col}">${analysis.confidence}%</span>
+          </div>
+          <div style="height:2px;background:var(--border);border-radius:1px;overflow:hidden">
+            <div style="height:100%;width:${analysis.confidence}%;background:${col};
+                        border-radius:1px;transition:width .8s"></div>
+          </div>
+        </div>`:''}
+      </div>`;
+    }).join('');
 
-      <!-- REASON -->
-      <div style="background:var(--bg3);border-radius:6px;padding:10px 12px;
-                  margin-bottom:12px;border-left:3px solid ${col}">
-        <div style="color:var(--muted2);font-size:11px;margin-bottom:4px">${s.reason}</div>
-        <div style="color:var(--text);font-size:12px;line-height:1.5">
-          ${analysis.summary || ''}
-        </div>
-      </div>
+  } catch(e) {
+    grid.innerHTML = `<div style="color:var(--red);font-size:12px;padding:20px">
+      Erro ao carregar sinais: ${e.message}</div>`;
+  }
+}
 
-      <!-- META -->
-      <div style="display:flex;gap:12px;font-size:10px;color:var(--muted);
-                  margin-bottom:10px;flex-wrap:wrap">
-        ${metaExtra}
-        ${analysis.time_horizon ? `<span>Horizonte: <span style="color:var(--text)">${analysis.time_horizon}</span></span>` : ''}
-        ${analysis.risk_level ? `<span>Risco: <span style="color:var(--text)">${analysis.risk_level}</span></span>` : ''}
-      </div>
+async function runFlowNow(){
+  const btn    = document.getElementById('btn-run-flow');
+  const status = document.getElementById('flow-status');
 
-      <!-- ACTION -->
-      <div style="display:flex;align-items:center;justify-content:space-between;
-                  padding-top:10px;border-top:1px solid var(--border)">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:10px;color:var(--muted2)">Ação sugerida:</span>
-          <span style="font-size:11px;font-weight:500;color:${actionColor}">
-            ${(analysis.action||'').replace('_',' ').toUpperCase()}
-          </span>
-        </div>
-        ${analysis.suggested_instrument ? `
-        <span style="font-size:10px;background:var(--bg4);border:1px solid var(--border2);
-                     padding:3px 8px;border-radius:5px;color:var(--muted2)">
-          ${analysis.suggested_instrument.replace('_',' ')}
-        </span>` : ''}
-      </div>
+  btn.textContent = '⏳ A varrer...';
+  btn.disabled    = true;
+  status.style.display = 'block';
 
-      <!-- CONFIDENCE BAR -->
-      ${analysis.confidence ? `
-      <div style="margin-top:8px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:3px;font-size:10px;color:var(--muted)">
-          <span>Confiança LLM</span><span style="color:${col}">${analysis.confidence}%</span>
-        </div>
-        <div style="height:2px;background:var(--border);border-radius:1px;overflow:hidden">
-          <div style="height:100%;width:${analysis.confidence}%;background:${col};border-radius:1px;transition:width .8s"></div>
-        </div>
-      </div>` : ''}
-    </div>`;
-  }).join('');
+  try {
+    const res  = await fetch('/api/flow/run', {method:'POST'});
+    const data = await res.json();
+
+    if(data.ok){
+      // Verificar de 10 em 10 segundos
+      let attempts = 0;
+      const check = setInterval(async () => {
+        attempts++;
+        try {
+          const r = await fetch('/api/flow-signals');
+          const d = await r.json();
+          if((d.signals||[]).length > 0 || attempts > 12){
+            clearInterval(check);
+            status.style.display = 'none';
+            btn.textContent = '▶ Correr agora';
+            btn.disabled    = false;
+            await renderFlow();
+            const n = (d.signals||[]).length;
+            showToast(
+              n > 0
+                ? `Scan concluído — ${n} sinais detetados`
+                : 'Scan concluído — sem sinais anormais hoje',
+              n > 0 ? 'success' : 'info'
+            );
+          }
+        } catch(e){ clearInterval(check); }
+      }, 10000);
+    } else {
+      throw new Error(data.error||'Erro desconhecido');
+    }
+  } catch(e){
+    status.style.display = 'none';
+    btn.textContent = '▶ Correr agora';
+    btn.disabled    = false;
+    showToast('Erro: ' + e.message, 'error');
+  }
 }
 let chartsInited = false;
 function initCharts(){
