@@ -18,7 +18,7 @@ git config user.name  "Trading Agent"       2>/dev/null || true
 
 # Arrancar dashboard Flask em background
 echo "A iniciar dashboard..."
-python dashboard/app.py &
+PORT=${PORT:-8080} python dashboard/app.py &
 DASHBOARD_PID=$!
 
 # Aguardar dashboard estar pronto
