@@ -6,7 +6,7 @@ Serve o dashboard HTML e expõe endpoints para adicionar/remover ações.
 import os, json, logging
 from datetime import date
 from pathlib import Path
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, make_response
 from dataclasses import asdict
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -42,6 +42,37 @@ def index():
     return send_from_directory(
         os.path.dirname(os.path.abspath(__file__)),
         "index.html"
+    )
+
+@app.route("/manifest.json")
+def manifest():
+    return send_from_directory(
+        os.path.dirname(os.path.abspath(__file__)),
+        "manifest.json"
+    )
+
+@app.route("/sw.js")
+def service_worker():
+    resp = make_response(send_from_directory(
+        os.path.dirname(os.path.abspath(__file__)),
+        "sw.js"
+    ))
+    resp.headers['Cache-Control'] = 'no-cache'
+    resp.headers['Content-Type']  = 'application/javascript'
+    return resp
+
+@app.route("/icon-192.png")
+def icon_192():
+    return send_from_directory(
+        os.path.dirname(os.path.abspath(__file__)),
+        "icon-192.png"
+    )
+
+@app.route("/icon-512.png")
+def icon_512():
+    return send_from_directory(
+        os.path.dirname(os.path.abspath(__file__)),
+        "icon-512.png"
     )
 
 
