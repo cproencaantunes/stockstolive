@@ -61,19 +61,27 @@ def service_worker():
     resp.headers['Content-Type']  = 'application/javascript'
     return resp
 
-@app.route("/icon-192.png")
-def icon_192():
-    return send_from_directory(
+@app.route("/icon.svg")
+def icon_svg():
+    resp = make_response(send_from_directory(
         os.path.dirname(os.path.abspath(__file__)),
-        "icon-192.png"
-    )
+        "icon.svg"
+    ))
+    resp.headers['Content-Type'] = 'image/svg+xml'
+    resp.headers['Cache-Control'] = 'public, max-age=86400'
+    return resp
 
+# Aliases para compatibilidade
+@app.route("/icon-192.png")
 @app.route("/icon-512.png")
-def icon_512():
-    return send_from_directory(
+def icon_png():
+    # Servir SVG como fallback para browsers que pedem PNG
+    resp = make_response(send_from_directory(
         os.path.dirname(os.path.abspath(__file__)),
-        "icon-512.png"
-    )
+        "icon.svg"
+    ))
+    resp.headers['Content-Type'] = 'image/svg+xml'
+    return resp
 
 
 # ── API — ESTADO ──────────────────────────────────────────────────
