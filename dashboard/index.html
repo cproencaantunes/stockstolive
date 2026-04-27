@@ -502,47 +502,30 @@ const NAMES = {
   GOOGL:'Alphabet',NFLX:'Netflix',COIN:'Coinbase',
 };
 
-let portfolio = [
-  {ticker:'NVDA',name:'Nvidia Corp',shares:100,strategy:'bcs',
-   short_strike:910,long_strike:920,expiry:'2026-04-11',
-   net_credit:3.80,iv:0.58,iv_rank:72,price:882.50,
-   opened:'2026-04-07',removing:false},
-  {ticker:'TSLA',name:'Tesla Inc',shares:100,strategy:'bcs',
-   short_strike:178,long_strike:183,expiry:'2026-04-11',
-   net_credit:1.45,iv:0.67,iv_rank:81,price:170.20,
-   opened:'2026-04-07',removing:false},
-  {ticker:'VRT',name:'Vertiv Holdings',shares:100,strategy:'cc',
-   short_strike:98,long_strike:null,expiry:'2026-04-11',
-   net_credit:0.85,iv:0.44,iv_rank:55,price:94.60,
-   opened:'2026-04-07',removing:false},
-  {ticker:'CRWV',name:'CoreWeave Inc',shares:100,strategy:'bcs',
-   short_strike:48,long_strike:51,expiry:'2026-04-11',
-   net_credit:1.10,iv:0.88,iv_rank:91,price:44.30,
-   opened:'2026-04-07',removing:false},
-];
+// ── ESTADO — carregado da API ──────────────────────────────────────
+let portfolio = [];
+let history   = [];
 
-const history = [
-  {date:'2026-04-04',ticker:'NVDA',strategy:'bcs',strikes:'$895/$905',expiry:'04/04',premium:3.60,pnl:360,status:'expirou'},
-  {date:'2026-04-04',ticker:'TSLA',strategy:'bcs',strikes:'$172/$177',expiry:'04/04',premium:1.30,pnl:130,status:'expirou'},
-  {date:'2026-04-04',ticker:'VRT', strategy:'cc', strikes:'$96',      expiry:'04/04',premium:0.80,pnl:80, status:'expirou'},
-  {date:'2026-04-04',ticker:'CRWV',strategy:'bcs',strikes:'$46/$49',  expiry:'04/04',premium:0.95,pnl:95, status:'expirou'},
-  {date:'2026-03-28',ticker:'NVDA',strategy:'bcs',strikes:'$880/$890',expiry:'03/28',premium:3.20,pnl:320,status:'expirou'},
-  {date:'2026-03-28',ticker:'TSLA',strategy:'cc', strikes:'$175',     expiry:'03/28',premium:1.60,pnl:-80,status:'roll antecipado'},
-  {date:'2026-03-28',ticker:'VRT', strategy:'cc', strikes:'$95',      expiry:'03/28',premium:0.75,pnl:75, status:'expirou'},
-  {date:'2026-03-28',ticker:'CRWV',strategy:'bcs',strikes:'$44/$47',  expiry:'03/28',premium:0.88,pnl:88, status:'expirou'},
-];
+async function loadPortfolio() {
+  try {
+    const res  = await fetch('/api/portfolio');
+    const data = await res.json();
+    portfolio  = data.positions || [];
+    renderPortfolio();
+  } catch(e) { console.error('Portfolio:', e); }
+}
 
-const research = [
-  {ticker:'ARM',name:'Arm Holdings',direction:'bullish',conf:88,
-   thesis:'Momentum forte em semicondutores AI. Breakout técnico acima de resistência de 6 semanas com volume 2.3x acima da média. Earnings na próxima semana com expectativas conservadoras.',
-   type:'technical_breakout',instrument:'call',horizon:'1-2 semanas'},
-  {ticker:'PLTR',name:'Palantir Tech',direction:'bullish',conf:76,
-   thesis:'Contratos governamentais AI em expansão. RSI em 52 após consolidação de 3 semanas. Setor de defesa tech com tailwind político.',
-   type:'sector_rotation',instrument:'covered_call',horizon:'1 mês'},
-  {ticker:'SMCI',name:'Super Micro',direction:'bearish',conf:71,
-   thesis:'Pressão nos margens com aumento de competição. IV extremamente alta (>100%) torna venda de prémio atrativa. Bear call spread com strike bem OTM.',
-   type:'news_catalyst',instrument:'bear_call_spread',horizon:'1-2 semanas'},
-];
+async function loadHistory() {
+  try {
+    const res = await fetch('/api/history');
+    history   = await res.json();
+    renderOrders();
+  } catch(e) { console.error('History:', e); }
+}
+
+// Atualizar preços de 5 em 5 minutos
+setInterval(loadPortfolio, 5 * 60 * 1000);
+
 
 let selectedStrategy = 'auto';
 let tickerToRemove   = null;
@@ -826,34 +809,6 @@ async function runResearchNow(){
 }
 
 // ── FLOW INSTITUCIONAL ─────────────────────────────────────────────
-const flowSignals = [
-  {ticker:'NVDA',signal:'accumulation',direction:'bullish',vol_ratio:6.2,
-   change_pct:3.1,price:882.50,strength:'extremo',source:'volume_spike',
-   reason:'Volume 6.2x + preço +3.1%',timestamp:'2026-04-27T14:30:00',
-   llm_analysis:{action:'considerar_entrada',confidence:85,
-     summary:'Acumulação institucional sem notícia — possível movimento antecipado',
-     suggested_instrument:'call',time_horizon:'esta semana',risk_level:'médio'}},
-  {ticker:'TSLA',signal:'distribution',direction:'bearish',vol_ratio:4.8,
-   change_pct:-2.4,price:170.20,strength:'forte',source:'volume_spike',
-   reason:'Volume 4.8x + preço -2.4%',timestamp:'2026-04-27T11:15:00',
-   llm_analysis:{action:'observar',confidence:72,
-     summary:'Distribuição moderada — aguardar confirmação antes de entrar',
-     suggested_instrument:'bear_call_spread',time_horizon:'esta semana',risk_level:'médio'}},
-  {ticker:'ARM',signal:'unusual_options',direction:'bullish',
-   option_type:'call',strike:130,expiry:'2026-05-02',
-   premium:1200000,premium_fmt:'$1.2M',strength:'extremo',source:'unusual_whales',
-   reason:'Compra de CALL $130 exp 02/05 — prémio $1.2M',
-   timestamp:'2026-04-27T10:00:00',
-   llm_analysis:{action:'considerar_entrada',confidence:91,
-     summary:'Bloco institucional massivo — alta convicção de subida antes do earnings',
-     suggested_instrument:'call',time_horizon:'esta semana',risk_level:'alto'}},
-  {ticker:'VIX',signal:'vix_spike',direction:'bearish',value:18.2,
-   price:22.4,strength:'forte',source:'vix_monitor',
-   reason:'VIX +18.2% — volatilidade em alta',timestamp:'2026-04-27T09:35:00',
-   llm_analysis:{action:'evitar',confidence:88,
-     summary:'VIX spike — mercado em stress, evitar novas posições hoje',
-     risk_level:'alto'}},
-];
 
 async function renderFlow(){
   const grid  = document.getElementById('flow-grid');
@@ -1233,8 +1188,8 @@ document.addEventListener('keydown',e=>{
 });
 
 // ── INIT ───────────────────────────────────────────────────────────
-renderPortfolio();
-renderOrders();
+loadPortfolio();
+loadHistory();
 renderResearch();
 renderFlow();
 </script>
