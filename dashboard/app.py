@@ -81,6 +81,13 @@ def get_research():
     return jsonify({"opportunities": [], "market_summary": "Sem dados ainda"})
 
 
+@app.route("/api/flow-signals")
+def get_flow_signals():
+    """Sinais de fluxo institucional para o dashboard."""
+    from institutional_flow import load_signals
+    return jsonify(load_signals())
+
+
 @app.route("/api/briefing")
 def get_briefing():
     p = Path("data/premarket_briefing.json")
