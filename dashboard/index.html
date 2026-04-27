@@ -342,7 +342,20 @@ main{padding:24px 28px;max-width:1440px;margin:0 auto}
 <div class="section" id="tab-research">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
     <div class="section-title">Oportunidades identificadas</div>
-    <span style="color:var(--muted2);font-size:11px" id="research-date">—</span>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="color:var(--muted2);font-size:11px" id="research-date">—</span>
+      <button id="btn-run-research" onclick="runResearchNow()"
+        style="background:var(--green-dim);border:1px solid rgba(0,214,143,0.25);
+               border-radius:8px;padding:7px 14px;color:var(--green);
+               font-family:'DM Mono',monospace;font-size:11px;cursor:pointer">
+        ▶ Correr agora
+      </button>
+    </div>
+  </div>
+  <div id="research-status" style="display:none;background:var(--amber-dim);
+       border:1px solid rgba(240,165,0,0.2);border-radius:8px;padding:12px 16px;
+       color:var(--amber);font-size:12px;margin-bottom:16px">
+    ⏳ A analisar mercado com Gemini — aguardar ~30 segundos...
   </div>
   <div class="research-grid" id="research-grid"></div>
 </div>
@@ -679,28 +692,125 @@ function renderOrders(){
 }
 
 // ── RESEARCH ───────────────────────────────────────────────────────
-function renderResearch(){
-  document.getElementById('research-date').textContent =
-    'Atualizado: '+new Date().toLocaleDateString('pt-PT');
-  document.getElementById('research-grid').innerHTML = research.map(r=>{
-    const cl = r.conf>=80?'h':r.conf>=65?'m':'l';
-    return `
-    <div class="opp-card">
-      <div class="opp-top">
-        <div>
-          <div class="opp-sym">${r.ticker}</div>
-          <div style="color:var(--muted2);font-size:10px;margin-top:1px">${r.name} · ${r.direction}</div>
+async function renderResearch(){
+  const grid    = document.getElementById('research-grid');
+  const dateEl  = document.getElementById('research-date');
+
+  try {
+    const res  = await fetch('/api/research');
+    const data = await res.json();
+    const opps = data.analysis?.opportunities || [];
+
+    dateEl.textContent = opps.length > 0
+      ? 'Atualizado: ' + (data.date || '—')
+      : '—';
+
+    if(opps.length === 0){
+      grid.innerHTML = `
+        <div style="grid-column:1/-1;text-align:center;padding:48px 20px;
+                    color:var(--muted2);font-size:13px;line-height:2">
+          Sem dados ainda.<br>
+          Clica <strong style="color:var(--green)">▶ Correr agora</strong>
+          para gerar a análise de hoje.<br>
+          <span style="font-size:11px;color:var(--muted)">
+            (O research corre automaticamente todos os dias às 18h00 ET)
+          </span>
+        </div>`;
+      return;
+    }
+
+    grid.innerHTML = opps.map(r => {
+      const conf = r.confidence || r.conf || 0;
+      const cl   = conf>=80?'h':conf>=65?'m':'l';
+      const name = r.name || r.ticker;
+      const dir  = r.direction || '';
+      const inst = r.suggested_strategy || r.instrument || '—';
+      const hor  = r.time_horizon || r.horizon || '—';
+      const cats = (r.catalysts||[]).map(c=>`<li>${c}</li>`).join('');
+      const risks= (r.risks||[]).map(c=>`<li>${c}</li>`).join('');
+
+      return `
+      <div class="opp-card">
+        <div class="opp-top">
+          <div>
+            <div class="opp-sym">${r.ticker}</div>
+            <div style="color:var(--muted2);font-size:10px;margin-top:1px">
+              ${name} · ${dir}
+            </div>
+          </div>
+          <span class="opp-conf ${cl}">${conf}% confiança</span>
         </div>
-        <span class="opp-conf ${cl}">${r.conf}% confiança</span>
-      </div>
-      <div class="opp-thesis">${r.thesis}</div>
-      <div class="opp-meta">
-        <span>Instrumento: <span>${r.instrument}</span></span>
-        <span>Horizonte: <span>${r.horizon}</span></span>
-      </div>
-      <div class="conf-bar"><div class="conf-fill ${cl}" style="width:${r.conf}%"></div></div>
-    </div>`;
-  }).join('');
+        <div class="opp-thesis">${r.thesis||''}</div>
+        ${cats ? `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;
+                    margin-bottom:10px;font-size:11px">
+          <div>
+            <p style="color:var(--muted);font-size:10px;margin:0 0 4px;
+                      text-transform:uppercase;letter-spacing:.8px">Catalisadores</p>
+            <ul style="color:var(--muted2);padding-left:14px;margin:0">${cats}</ul>
+          </div>
+          <div>
+            <p style="color:var(--muted);font-size:10px;margin:0 0 4px;
+                      text-transform:uppercase;letter-spacing:.8px">Riscos</p>
+            <ul style="color:var(--muted2);padding-left:14px;margin:0">${risks}</ul>
+          </div>
+        </div>` : ''}
+        <div class="opp-meta">
+          <span>Instrumento: <span>${inst}</span></span>
+          <span>Horizonte: <span>${hor}</span></span>
+        </div>
+        <div class="conf-bar">
+          <div class="conf-fill ${cl}" style="width:${conf}%"></div>
+        </div>
+      </div>`;
+    }).join('');
+
+  } catch(e) {
+    grid.innerHTML = `<div style="color:var(--red);font-size:12px;padding:20px">
+      Erro ao carregar research: ${e.message}</div>`;
+  }
+}
+
+async function runResearchNow(){
+  const btn    = document.getElementById('btn-run-research');
+  const status = document.getElementById('research-status');
+
+  btn.textContent = '⏳ A analisar...';
+  btn.disabled    = true;
+  status.style.display = 'block';
+
+  try {
+    const res  = await fetch('/api/research/run', {method:'POST'});
+    const data = await res.json();
+
+    if(data.ok){
+      // Verificar de 5 em 5 segundos se o research ficou pronto
+      let attempts = 0;
+      const check = setInterval(async () => {
+        attempts++;
+        try {
+          const r = await fetch('/api/research');
+          const d = await r.json();
+          if((d.analysis?.opportunities||[]).length > 0 || attempts > 12){
+            clearInterval(check);
+            status.style.display = 'none';
+            btn.textContent = '▶ Correr agora';
+            btn.disabled    = false;
+            await renderResearch();
+            showToast('Research concluído — ' +
+              (d.analysis?.opportunities||[]).length + ' oportunidades', 'success');
+          }
+        } catch(e){ clearInterval(check); }
+      }, 5000);
+    } else {
+      throw new Error(data.error || 'Erro desconhecido');
+    }
+  } catch(e) {
+    status.style.display = 'none';
+    btn.textContent = '▶ Correr agora';
+    btn.disabled    = false;
+    showToast('Erro: ' + e.message, 'error');
+  }
 }
 
 // ── FLOW INSTITUCIONAL ─────────────────────────────────────────────
