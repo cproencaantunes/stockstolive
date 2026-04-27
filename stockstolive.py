@@ -60,14 +60,17 @@ def connect_ibkr():
         ib.connect(IBKR_HOST, IBKR_PORT, clientId=IBKR_CLIENT)
         log.info(f"IBKR ligado em {IBKR_HOST}:{IBKR_PORT}")
     except Exception as e:
-        log.error(f"Erro a ligar ao IBKR: {e}")
-        raise
-
+        log.warning(f"IBKR não disponível: {e}")
+        log.warning("A continuar sem IBKR — só dashboard e research activos")
 
 def ensure_connected():
     if not ib.isConnected():
-        log.warning("IBKR desligado — a reconectar")
-        connect_ibkr()
+        log.warning("IBKR desligado — a tentar reconectar")
+        try:
+            ib.connect(IBKR_HOST, IBKR_PORT, clientId=IBKR_CLIENT)
+            log.info("IBKR reconectado")
+        except Exception as e:
+            log.warning(f"Reconexão falhou: {e} — a saltar ciclo")
 
 
 # ── ROLL SEMANAL ──────────────────────────────────────────────────
